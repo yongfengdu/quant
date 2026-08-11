@@ -1,0 +1,29 @@
+{
+  "gates": {
+    "accuracy_3pct": {"min": 15.0, "adjustable": true, "description": "预测准确率(%)"},
+    "avg_signal_return": {"min": 0.0, "adjustable": true, "description": "平均信号收益(%)"},
+    "total_trades": {"min": 50, "adjustable": false, "description": "最低交易次数"},
+    "max_drawdown": {"min": -0.45, "adjustable": true, "description": "最大回撤"},
+    "median_signal_return": {"min": 0.0, "enforce_after": 100, "adjustable": true, "description": "中位数收益(%, 100笔以上强制)"}
+  },
+  "strategy_params": {
+    "h175": {
+      "oversold_threshold": -0.10,
+      "vol_ratio": 1.5,
+      "price_position": 0.45,
+      "excluded_sectors": ["医疗器械", "医疗服务", "生物制品", "半导体", "消费电子"],
+      "cap_range": [2000000000, 50000000000]
+    }
+  },
+  "data_schema": {
+    "available_sectors": [
+      "银行Ⅱ", "证券Ⅱ", "保险Ⅱ", "半导体", "软件开发", "电池", "光伏设备",
+      "医疗器械", "医疗服务", "化学制药", "生物制品", "中药Ⅱ", "白酒Ⅱ",
+      "白色家电", "汽车零部件", "电力", "物流", "通信设备", "环境治理",
+      "IT服务Ⅱ", "房地产开发", "自动化设备", "基础建设"
+    ],
+    "sector_columns": ["sector", "sector_close", "sector_ret_20d"],
+    "market_columns": ["mkt_close", "mkt_ret_20d"],
+    "deprecated_sector_names": ["CXO", "创新药", "医药"]
+  }
+}

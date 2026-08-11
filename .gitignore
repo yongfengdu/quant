@@ -1,0 +1,114 @@
+# ===== 环境/密钥 =====
+.env
+.venv/
+*.key
+api_key
+credentials
+
+# ===== Python =====
+__pycache__/
+*.pyc
+*.pyo
+*.egg-info/
+.pytest_cache/
+
+# ===== 数据文件 (体积大, 不入库) =====
+*.parquet
+*.parquet.bak*
+*.csv
+data/
+~/.cache/
+
+# ===== 运行时产物 =====
+*.log
+kimi_health.json
+_candidate_*.py
+
+# ===== LLM 会话/进化历史 (体积大, 调试用) =====
+kimi_sessions/
+rounds/
+hypotheses/
+kimi_bridge_sessions/
+audit*.log
+results.tsv
+results*.tsv
+
+# ===== 旧策略快照 (仅历史) =====
+best_strategy.py
+strategy_h175_backup.py
+
+# ===== 临时/备份 =====
+*.bak
+*.tmp
+/tmp/
+.DS_Store
+_cron_tmp.log
+
+# ===== 旧策略实验变体 (仅本地保留) =====
+strategy_adaptive*.py
+strategy_conservative.py
+strategy_explore*.py
+strategy_feedback*.py
+strategy_passed*.py
+strategy_v[0-9].py
+strategy_working_backup.py
+
+# ===== 旧进化管线 (已停用, 仅本地保留) =====
+pipeline.py
+pipeline_v2.py
+pipeline_v2_cron.sh
+auto_improve.py
+daily_pipeline.py
+daily_quant_job.py
+run_ab_test.py
+run_control2.sh
+run_treatment*.sh
+monitor_treatment.sh
+cron_evening.sh
+cron_morning.sh
+
+# ===== 一次性数据构建脚本 (仅本地保留) =====
+build_stock_list*.py
+download_data*.py
+download_missing_klines.py
+enrich_daily.py
+filter_by_finance.py
+fix_sectors.py
+gen_mock_data.py
+get_stock_codes.py
+rebuild_universe.py
+recover_data.sh
+validate_klines.py
+predict_june18.py
+debug_extract.py
+test_kimi_output.py
+clean_lessons.py
+results_tsv.py
+hypothesis_schema.py
+prepare.py
+
+# ===== 旧文档 =====
+LESSONS.md
+LESSONS_FULL.md
+backlog.md
+program.md
+report.md
+
+# ===== 其他工具目录/归档 =====
+.understand-anything/
+experiments/
+islands/*/strategies/archive/
+islands/*/state.json
+*.json.bak*
+predictions.parquet
+trades.parquet
+current_stocks.csv
+feedback.json
+
+# ===== 冗余/备份 =====
+strategy.py.bak*
+verified_strategies/
+islands/meta_state.json
+islands/*/strategies/*.json
+"X%*"
+*因为*
