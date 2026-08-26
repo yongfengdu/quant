@@ -112,7 +112,9 @@ class HealthChecker:
                 
                 if state_file.exists():
                     state = json.loads(state_file.read_text())
-                    count = len(state.get('strategies', []))
+                    live = state.get('live_strategies', [])
+                    candidates = state.get('candidate_strategies', [])
+                    count = len(live) + len(candidates)
                     island_status[regime] = count
                     total_strategies += count
                 else:
@@ -173,16 +175,27 @@ class HealthChecker:
             )
             output = result.stdout
             
-            # 检查关键任务是否存在
+            # 检查关键任务是否存在 (hermes cron)
             if '量化策略每日预测' not in output:
                 self.add_issue("WARNING", "CRON", "量化策略每日预测 任务未找到")
             
-            if '岛屿进化' not in output:
-                self.add_issue("WARNING", "CRON", "岛屿进化 任务未找到")
+            if '量化系统健康监控' not in output:
+                self.add_issue("WARNING", "CRON", "量化系统健康监控 任务未找到")
             
             # 检查是否有失败记录
             if 'Delivery failed' in output:
                 self.add_issue("WARNING", "CRON", "存在消息发送失败")
+
+            # 夜间进化任务在系统 crontab (非 hermes cron)
+            try:
+                cron_res = subprocess.run(
+                    ['crontab', '-l'],
+                    capture_output=True, text=True, timeout=10
+                )
+                if 'evolve_v3' not in cron_res.stdout:
+                    self.add_issue("WARNING", "CRON", "岛屿进化 任务未找到 (系统crontab)")
+            except Exception:
+                self.add_issue("WARNING", "CRON", "无法读取系统 crontab")
             
             return True
         except Exception as e:

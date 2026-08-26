@@ -172,9 +172,25 @@ def summarize_existing(island: str):
     return "\n".join(lines) if lines else "  (无)"
 
 
+def get_market_feedback():
+    """读取在线实盘反馈 (daily_feedback 的结论), 用于进化提示词, 关闭反馈回路。"""
+    try:
+        from daily_feedback import format_feedback_for_prompt
+        return format_feedback_for_prompt()
+    except Exception as e:
+        return f"  (在线反馈获取失败: {e})"
+
+
 # ---------- 构建单agent prompt ----------
-def build_prompt(island: str, existing: str, failed_notes: str):
+def build_prompt(island: str, existing: str, failed_notes: str, feedback: str = ""):
     interface = (PROJECT_DIR / "prompts" / "interface.md").read_text()
+    feedback_block = ""
+    if feedback.strip():
+        feedback_block = f"""
+
+# 近期在线实盘反馈 (策略正在错过这些机会, 优先补这个缺口)
+{feedback}
+"""
     return f"""你是量化策略研究员兼工程师。你的任务:为【{island}市】设计一个A股T+1择时策略,并直接输出完整可运行的Python代码。
 
 # 交易逻辑
@@ -191,7 +207,7 @@ T日收盘出信号 → T+1开盘买入 → T+2开盘卖出。目标: 预测 (T+
 
 # 近期失败教训 (避免重蹈覆辙)
 {failed_notes}
-
+{feedback_block}
 # 通过标准 (Tiered Gate, 必须满足其一且平均收益>0)
 - 准确率≥30% 且 交易≥7笔
 - 准确率≥25% 且 交易≥13笔
@@ -270,6 +286,12 @@ def main():
     existing = summarize_existing(args.island)
     sdir = PROJECT_DIR / "islands" / f"island_{args.island}" / "strategies"
 
+    feedback = get_market_feedback()
+    if feedback.strip():
+        print("在线市场反馈已注入提示词")
+    else:
+        print("(无在线市场反馈, 继续)")
+
     nums = [int(re.search(r"_(\d+)", p.stem).group(1))
             for p in sdir.glob(f"{args.island.upper()}_*.py")
             if re.search(r"_(\d+)", p.stem)]
@@ -281,7 +303,7 @@ def main():
 
     for i in range(args.n):
         print(f"\n{'='*60}\n候选 {i+1}/{args.n} (K3 生成中...)\n{'='*60}")
-        prompt = build_prompt(args.island, existing, failed_notes)
+        prompt = build_prompt(args.island, existing, failed_notes, feedback)
 
         resp, err_type = wd.call_with_retry(prompt, timeout=args.timeout,
                                             max_retries=args.retries)

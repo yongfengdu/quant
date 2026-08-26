@@ -54,8 +54,14 @@ log "Python: $PYTHON"
 #-------------------------------------------------------------------------------
 log_section "📥 Step 1: 更新数据"
 
-# 检查数据是否已是最新
+# 检查是否需要强制更新数据 (health_monitor 写入的标记)
 FORCE_UPDATE=""
+if [ -f "$SCRIPT_DIR/.need_data_update" ]; then
+    log "发现数据更新标记，执行强制更新"
+    FORCE_UPDATE="--force"
+    rm -f "$SCRIPT_DIR/.need_data_update"
+fi
+
 if [ "$1" = "--force" ]; then
     FORCE_UPDATE="--force"
     log "强制更新模式"
@@ -198,12 +204,3 @@ log "查看统计: python daily_tracker.py summary"
 echo ""
 echo "=== 最近日志 ==="
 tail -20 "$LOG_FILE"
-
-#-------------------------------------------------------------------------------
-# Step 0: 检查是否需要强制更新数据
-#-------------------------------------------------------------------------------
-if [ -f "$SCRIPT_DIR/.need_data_update" ]; then
-    log "发现数据更新标记，执行强制更新"
-    FORCE_UPDATE="--force"
-    rm -f "$SCRIPT_DIR/.need_data_update"
-fi

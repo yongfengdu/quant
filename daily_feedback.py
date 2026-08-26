@@ -604,7 +604,11 @@ def format_feedback_for_prompt():
             lines.append(f"   命中率: {analysis['hit_rate']*100:.1f}%")
         if patterns and patterns.get("insights"):
             lines.append("   模式洞察:")
-            for p in patterns["insights"][:3]:
+            insights = patterns["insights"]
+            actionable_kw = ("多数错过", "趋势策略", "板块轮动", "跳空", "收阳")
+            actionable = [p for p in insights if any(k in p for k in actionable_kw)]
+            picked = (actionable + [p for p in insights if p not in actionable])[:3]
+            for p in picked:
                 lines.append(f"     - {p}")
         if analysis['missed_count'] > 0 and analysis['missed_details']:
             top_missed = sorted(analysis['missed_details'], key=lambda x: x.get('actual_return', 0), reverse=True)[:3]

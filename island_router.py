@@ -25,8 +25,8 @@ ISLANDS_DIR = PROJECT_DIR / "islands"
 
 # 只列已通过 Gate 的策略 (2026-08 网格搜索验证)
 ISLAND_STRATEGIES = {
-    "bull": ["BULL_002"],
-    "bear": ["BEAR_001", "BEAR_003", "BEAR_004"],
+    "bull": ["BULL_002", "BULL_003", "BULL_006"],
+    "bear": ["BEAR_001", "BEAR_003", "BEAR_004", "BEAR_005", "BEAR_006", "BEAR_007"],
     "range": ["RANGE_001", "RANGE_002", "RANGE_005"],
 }
 
