@@ -10,3 +10,12 @@ dependencies = [
     "pyarrow>=14.0",
     "tabulate>=0.9",
 ]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.0",
+]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+
