@@ -181,6 +181,8 @@ def discover_signals(df, n=3, horizon=20, registry=None, test=False, timeout=480
         report = validate_signal(df2, "llm_factor", horizon)
         print(format_report(report))
         sid = f"LLM_{int(time.time())}"
+        # 持久化因子代码 (definition), 否则信号无法复现使用
+        reg.register(sid, "llm_factor", horizon, definition=code)
         lc.validate_and_promote(sid, report)
         results.append({"passed": report["passed"], "sid": sid, "report": report,
                         "code": code})
