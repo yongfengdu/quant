@@ -19,12 +19,18 @@ from datetime import datetime
 from pathlib import Path
 
 sys.path.insert(0, "/root/quant-autoresearch")
+import numpy as np
 import pandas as pd
 
 CACHE_DIR = Path.home() / ".cache" / "quant-autoresearch"
 PROJECT_DIR = Path("/root/quant-autoresearch")
 RECOMMENDATIONS_FILE = PROJECT_DIR / "data" / "recommendations.csv"
+EFFECTIVENESS_LOG = PROJECT_DIR / "data" / "prediction_effectiveness.csv"
 MONITOR_LOG = PROJECT_DIR / "monitor.log"
+
+# 回测基线 (regime门控组合, 20日持有, 2018-2026 回测)
+BASELINE_WIN = 0.50   # 上涨率(>0) 回测约 50%
+BASELINE_HIT3 = 0.11  # 3%命中率 回测约 11%
 
 
 class SystemMonitor:
@@ -142,17 +148,16 @@ class SystemMonitor:
         except Exception as e:
             self.log("WARNING", "预测", f"注册表读取失败: {e}")
 
-        # 4b. 推荐命中率 (T+20 验证)
+        # 4b. 推荐命中率 (T+20 验证) + 回测 vs 实盘偏差
         if not RECOMMENDATIONS_FILE.exists():
             return  # 尚无推荐, 不算异常
         try:
+            import numpy as np
             rec = pd.read_csv(RECOMMENDATIONS_FILE, dtype={"code": str})
             self.metrics["rec_total"] = len(rec)
             daily = pd.read_parquet(CACHE_DIR / "daily_bars.parquet")
             daily["date"] = daily["date"].astype(str)
-            # 20日前向收益 (split_factor 复权)
             g = daily.groupby("code", sort=False)
-            adj = daily["close"] * daily["split_factor"]
             daily["fwd20"] = g["close"].shift(-20) * g["split_factor"].shift(-20) / (daily["close"] * daily["split_factor"]) - 1
             fwd_map = {(str(r["code"]), str(r["date"])): r["fwd20"]
                        for _, r in daily.dropna(subset=["fwd20"]).iterrows()}
@@ -160,19 +165,53 @@ class SystemMonitor:
                         for _, r in rec.iterrows()
                         if (r["code"], r["signal_date"]) in fwd_map]
             if verified:
-                import numpy as np
                 arr = np.array(verified)
                 hit = (arr > 0.03).mean() * 100
                 win = (arr > 0).mean() * 100
                 self.metrics["rec_verified"] = len(verified)
                 self.metrics["rec_hit3"] = round(hit, 1)
                 self.metrics["rec_win"] = round(win, 1)
-                if len(verified) >= 20 and hit < 8:
-                    self.log("WARNING", "预测", f"推荐 3%命中率 {hit:.1f}% 偏低 (<8%)")
+                # 持久化效果日志 (累计口径, 供长期观察趋势)
+                self._log_effectiveness(len(verified), hit / 100, win / 100, arr.mean())
+                # 回测 vs 实盘偏差检测
+                if len(verified) >= 20:
+                    if win / 100 < BASELINE_WIN - 0.10:
+                        self.log("WARNING", "预测", f"实盘上涨率 {win:.1f}% 显著低于回测基线 {BASELINE_WIN*100:.0f}%")
+                    if hit / 100 < BASELINE_HIT3 * 0.7:
+                        self.log("WARNING", "预测", f"实盘3%命中率 {hit:.1f}% 显著低于回测基线 {BASELINE_HIT3*100:.0f}%")
             else:
                 self.metrics["rec_verified"] = 0
         except Exception as e:
             self.log("WARNING", "预测", f"推荐验证失败: {e}")
+
+    def _log_effectiveness(self, n_new, hit3, win, avg_ret):
+        """持久化预测效果日志 (累计口径, append)。"""
+        try:
+            # 读历史累计
+            if EFFECTIVENESS_LOG.exists():
+                hist = pd.read_csv(EFFECTIVENESS_LOG)
+                n_cum = int(hist["n_cum"].iloc[-1]) + n_new
+            else:
+                n_cum = n_new
+            # 重新算累计命中率 (从推荐文件)
+            rec = pd.read_csv(RECOMMENDATIONS_FILE, dtype={"code": str})
+            daily = pd.read_parquet(CACHE_DIR / "daily_bars.parquet")
+            daily["date"] = daily["date"].astype(str)
+            g = daily.groupby("code", sort=False)
+            daily["fwd20"] = g["close"].shift(-20) * g["split_factor"].shift(-20) / (daily["close"] * daily["split_factor"]) - 1
+            fwd_map = {(str(r["code"]), str(r["date"])): r["fwd20"]
+                       for _, r in daily.dropna(subset=["fwd20"]).iterrows()}
+            arr = np.array([fwd_map[(r["code"], r["signal_date"])]
+                            for _, r in rec.iterrows()
+                            if (r["code"], r["signal_date"]) in fwd_map])
+            row = {"date": datetime.now().strftime("%Y-%m-%d %H:%M"),
+                   "n_cum": int(len(arr)),
+                   "cum_hit3": round(float((arr > 0.03).mean()), 4),
+                   "cum_win": round(float((arr > 0).mean()), 4),
+                   "cum_avg_ret": round(float(arr.mean()), 4)}
+            pd.DataFrame([row]).to_csv(EFFECTIVENESS_LOG, mode="a", header=not EFFECTIVENESS_LOG.exists(), index=False)
+        except Exception:
+            pass
 
     # ============ 5. 其他 ============
     def check_other(self):
