@@ -41,11 +41,14 @@ def synthetic_bars():
 
 @pytest.fixture
 def real_bars():
-    """真实缓存数据 (若存在), 用于黄金测试。"""
-    p = CACHE_DIR / "daily.parquet"
+    """真实缓存数据 (新 daily_bars 优先, 旧 daily 兜底), 用于黄金测试。"""
+    p = CACHE_DIR / "daily_bars.parquet"
     if not p.exists():
-        pytest.skip("daily.parquet 不存在")
+        p = CACHE_DIR / "daily.parquet"
+    if not p.exists():
+        pytest.skip("无缓存数据")
     df = pd.read_parquet(p)
     df["date"] = df["date"].astype(str)
-    df["split_factor"] = 1.0
+    if "split_factor" not in df.columns:
+        df["split_factor"] = 1.0
     return df
