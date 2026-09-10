@@ -22,6 +22,7 @@ from data_store import audit_log, validate_bars
 
 CACHE_DIR = Path.home() / ".cache" / "quant-autoresearch"
 LOG_PATH = Path("/root/quant-autoresearch") / "pipeline_daily.log"
+RECOMMENDATIONS_FILE = Path("/root/quant-autoresearch") / "data" / "recommendations.csv"
 
 
 def log(msg):
@@ -64,6 +65,17 @@ def step_recommend():
     df = pd.read_parquet(CACHE_DIR / "daily_bars.parquet")
     rec = generate_recommendation(df)
     log(f"  信号日 {rec['date']}  市场状态 {rec['regime']}")
+    # 持久化推荐 (供监控检测预测效果)
+    rows = [{"signal_date": rec["date"], "regime": rec["regime"],
+             "code": s["code"], "close": s["close"], "score": s["score"]}
+            for s in rec["stocks"]]
+    RECOMMENDATIONS_FILE.parent.mkdir(parents=True, exist_ok=True)
+    new_df = pd.DataFrame(rows)
+    if RECOMMENDATIONS_FILE.exists():
+        old = pd.read_csv(RECOMMENDATIONS_FILE, dtype={"code": str})
+        new_df = pd.concat([old, new_df], ignore_index=True).drop_duplicates(
+            subset=["signal_date", "code"], keep="last")
+    new_df.to_csv(RECOMMENDATIONS_FILE, index=False)
     for i, s in enumerate(rec["stocks"][:10], 1):
         log(f"    {i}. {s['code']}  收盘 {s['close']}  分 {s['score']}")
 
