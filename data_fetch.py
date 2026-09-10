@@ -102,14 +102,17 @@ def load_split_events_cache():
     df = pd.read_parquet(SPLIT_EVENTS_PATH)
     cache = {}
     for code, grp in df.groupby("code"):
-        cache[str(code)] = list(zip(grp["ex_date"], grp["factor"]))
+        events = [(ex, f) for ex, f in zip(grp["ex_date"], grp["factor"]) if ex != ""]
+        cache[str(code)] = events
     return cache
 
 
 def save_split_events_cache(cache):
-    """保存分红送转事件缓存。"""
+    """保存分红送转事件缓存 (无送转的用哨兵行 ex_date='' 持久化, 避免重复拉取)。"""
     rows = []
     for code, events in cache.items():
+        if not events:
+            rows.append({"code": code, "ex_date": "", "factor": 1.0})
         for ex, factor in events:
             rows.append({"code": code, "ex_date": ex, "factor": factor})
     pd.DataFrame(rows).to_parquet(SPLIT_EVENTS_PATH, index=False)

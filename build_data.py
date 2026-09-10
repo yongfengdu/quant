@@ -66,8 +66,9 @@ def pull(codes, out_path=OUT_PATH, start=START, end=END, resume=True):
               f"日期 {d['date'].min()} ~ {d['date'].max()}")
 
 
-def update_incremental(out_path=OUT_PATH, lookback_days=10):
-    """增量更新: 拉最近 lookback_days 天数据合并 (用分红事件缓存, 快)。"""
+def update_incremental(out_path=OUT_PATH, lookback_days=10, workers=5):
+    """增量更新: 并发拉最近 lookback_days 天数据合并 (用分红事件缓存, 快)。"""
+    from concurrent.futures import ThreadPoolExecutor, as_completed
     if not out_path.exists():
         print("无现有数据, 请先跑全量 pull")
         return
@@ -75,26 +76,35 @@ def update_incremental(out_path=OUT_PATH, lookback_days=10):
     latest = existing["date"].max()
     start = (pd.Timestamp(latest) - pd.Timedelta(days=lookback_days)).strftime("%Y-%m-%d")
     end = pd.Timestamp.now().strftime("%Y-%m-%d")
-    print(f"增量更新: {start} ~ {end}")
+    print(f"增量更新: {start} ~ {end} (并发 {workers})")
 
     codes = load_universe()
     split_cache = load_split_events_cache()
+    print(f"分红事件缓存: {len(split_cache)} 只")
+
     frames = []
     ok = fail = 0
     t0 = time.time()
-    for i, code in enumerate(codes, 1):
+
+    def fetch_one(code):
         try:
             df = fetch_raw_with_factor(code, start, end, split_cache=split_cache)
+            return code, df
+        except Exception as e:  # noqa: BLE001
+            return code, None
+
+    with ThreadPoolExecutor(max_workers=workers) as ex:
+        futures = {ex.submit(fetch_one, c): c for c in codes}
+        for i, f in enumerate(as_completed(futures), 1):
+            code, df = f.result()
             if df is not None and len(df) > 0:
                 df["code"] = code
                 frames.append(df)
                 ok += 1
-        except Exception as e:  # noqa: BLE001
-            fail += 1
-            if fail <= 5:
-                print(f"  {code}: 失败 {type(e).__name__}")
-        if i % 100 == 0:
-            print(f"  进度 {i}/{len(codes)}")
+            else:
+                fail += 1
+            if i % 100 == 0:
+                print(f"  进度 {i}/{len(codes)}, 成功 {ok}, 失败 {fail}")
     save_split_events_cache(split_cache)
 
     if frames:
