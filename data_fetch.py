@@ -92,6 +92,29 @@ def fetch_raw_kline(code, start="2018-01-01", end="2030-01-01"):
         return fetch_akshare_kline(code, start.replace("-", ""), end.replace("-", ""))
 
 
+SPLIT_EVENTS_PATH = CACHE_DIR / "split_events.parquet"
+
+
+def load_split_events_cache():
+    """加载分红送转事件缓存 (code -> [(ex_date, factor)])。"""
+    if not SPLIT_EVENTS_PATH.exists():
+        return {}
+    df = pd.read_parquet(SPLIT_EVENTS_PATH)
+    cache = {}
+    for code, grp in df.groupby("code"):
+        cache[str(code)] = list(zip(grp["ex_date"], grp["factor"]))
+    return cache
+
+
+def save_split_events_cache(cache):
+    """保存分红送转事件缓存。"""
+    rows = []
+    for code, events in cache.items():
+        for ex, factor in events:
+            rows.append({"code": code, "ex_date": ex, "factor": factor})
+    pd.DataFrame(rows).to_parquet(SPLIT_EVENTS_PATH, index=False)
+
+
 def fetch_split_events(code, retries=5):
     """从 AkShare 拉分红送配事件, 返回 [(除权除息日, 送转比例)] 升序。"""
     import akshare as ak
@@ -115,6 +138,17 @@ def fetch_split_events(code, retries=5):
     return sorted(events)
 
 
+def get_split_events(code, cache=None):
+    """获取分红送转事件 (优先用缓存, 未命中才拉取)。"""
+    cache = cache if cache is not None else load_split_events_cache()
+    code = str(code)
+    if code in cache:
+        return cache[code]
+    events = fetch_split_events(code)
+    cache[code] = events
+    return events
+
+
 def fetch_raw_history(code, start="2018-01-01", end="2030-01-01", chunk_years=2):
     """分段拉取不复权历史 (腾讯单次上限 640 行 ≈ 2.5 年)。"""
     chunks = []
@@ -132,12 +166,12 @@ def fetch_raw_history(code, start="2018-01-01", end="2030-01-01", chunk_years=2)
     return out.drop_duplicates(subset=["date"]).sort_values("date").reset_index(drop=True)
 
 
-def fetch_raw_with_factor(code, start="2018-01-01", end="2030-01-01"):
+def fetch_raw_with_factor(code, start="2018-01-01", end="2030-01-01", split_cache=None):
     """拉不复权 + 构建送转因子。返回 DataFrame(OUT_COLS)。"""
     raw = fetch_raw_history(code, start, end)
     if raw is None or len(raw) == 0:
         return None
-    events = fetch_split_events(code)
+    events = get_split_events(code, split_cache)
     raw = raw.sort_values("date").reset_index(drop=True)
 
     # split_factor: 阶梯函数, 在除权日跳变

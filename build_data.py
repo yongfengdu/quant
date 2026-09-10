@@ -14,7 +14,12 @@ from pathlib import Path
 
 import pandas as pd
 
-from data_fetch import fetch_raw_with_factor, load_universe
+from data_fetch import (
+    fetch_raw_with_factor,
+    load_universe,
+    load_split_events_cache,
+    save_split_events_cache,
+)
 
 CACHE_DIR = Path.home() / ".cache" / "quant-autoresearch"
 OUT_PATH = CACHE_DIR / "daily_bars.parquet"
@@ -61,19 +66,66 @@ def pull(codes, out_path=OUT_PATH, start=START, end=END, resume=True):
               f"日期 {d['date'].min()} ~ {d['date'].max()}")
 
 
+def update_incremental(out_path=OUT_PATH, lookback_days=10):
+    """增量更新: 拉最近 lookback_days 天数据合并 (用分红事件缓存, 快)。"""
+    if not out_path.exists():
+        print("无现有数据, 请先跑全量 pull")
+        return
+    existing = pd.read_parquet(out_path)
+    latest = existing["date"].max()
+    start = (pd.Timestamp(latest) - pd.Timedelta(days=lookback_days)).strftime("%Y-%m-%d")
+    end = pd.Timestamp.now().strftime("%Y-%m-%d")
+    print(f"增量更新: {start} ~ {end}")
+
+    codes = load_universe()
+    split_cache = load_split_events_cache()
+    frames = []
+    ok = fail = 0
+    t0 = time.time()
+    for i, code in enumerate(codes, 1):
+        try:
+            df = fetch_raw_with_factor(code, start, end, split_cache=split_cache)
+            if df is not None and len(df) > 0:
+                df["code"] = code
+                frames.append(df)
+                ok += 1
+        except Exception as e:  # noqa: BLE001
+            fail += 1
+            if fail <= 5:
+                print(f"  {code}: 失败 {type(e).__name__}")
+        if i % 100 == 0:
+            print(f"  进度 {i}/{len(codes)}")
+    save_split_events_cache(split_cache)
+
+    if frames:
+        new = pd.concat(frames, ignore_index=True)
+        all_df = pd.concat([existing, new], ignore_index=True).drop_duplicates(
+            subset=["code", "date"], keep="last")
+        all_df.sort_values(["code", "date"]).to_parquet(out_path, index=False)
+    elapsed = time.time() - t0
+    print(f"增量完成: 成功 {ok}, 失败 {fail}, 耗时 {elapsed/60:.1f} 分钟")
+    d = pd.read_parquet(out_path)
+    print(f"总数据: {len(d)} 行, 最新日期 {d['date'].max()}")
+
+
 if __name__ == "__main__":
     ap = argparse.ArgumentParser()
     ap.add_argument("--n", type=int, help="只拉前 N 只 (小样本验证)")
     ap.add_argument("--codes", help="逗号分隔的代码")
     ap.add_argument("--start", default=START)
     ap.add_argument("--end", default=END)
+    ap.add_argument("--incremental", action="store_true", help="增量更新最近数据")
     args = ap.parse_args()
 
-    if args.codes:
+    if args.incremental:
+        update_incremental()
+    elif args.codes:
         codes = [c.strip() for c in args.codes.split(",")]
+        print(f"拉取 {len(codes)} 只股票, {args.start} ~ {args.end}")
+        pull(codes, start=args.start, end=args.end)
     else:
         codes = load_universe()
         if args.n:
             codes = codes[:args.n]
-    print(f"拉取 {len(codes)} 只股票, {args.start} ~ {args.end}")
-    pull(codes, start=args.start, end=args.end)
+        print(f"拉取 {len(codes)} 只股票, {args.start} ~ {args.end}")
+        pull(codes, start=args.start, end=args.end)
