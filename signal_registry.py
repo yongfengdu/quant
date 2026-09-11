@@ -45,17 +45,27 @@ class SignalRegistry:
     def _sig(self, sid):
         return self.data["signals"].setdefault(sid, {
             "id": sid, "status": "proposed", "factor": None, "horizon": None,
+            "type": None, "direction": 1, "regime": "all",
             "definition": None, "created_at": pd.Timestamp.now().isoformat(),
             "ic_history": [], "rolling_ic": None, "decay_strikes": 0,
             "validation": None, "last_updated": pd.Timestamp.now().isoformat(),
         })
 
-    def register(self, sid, factor, horizon, definition=None, status="proposed"):
+    def register(self, sid, factor, horizon, definition=None, status="proposed",
+                 type_="builtin", direction=1, regime="all"):
+        """注册信号。
+        type_: 'builtin'(factors.py内置) | 'code'(LLM代码)
+        direction: 1=买高因子, -1=买低因子(反转)
+        regime: 'bull' | 'bear/range' | 'all'
+        """
         s = self._sig(sid)
         s["factor"] = factor
         s["horizon"] = horizon
         s["definition"] = definition
         s["status"] = status
+        s["type"] = type_
+        s["direction"] = direction
+        s["regime"] = regime
         self.save()
         return s
 
@@ -97,6 +107,17 @@ class SignalRegistry:
 
     def list_by_status(self, status):
         return [sid for sid, s in self.data["signals"].items() if s["status"] == status]
+
+    def active_signals(self, regime=None):
+        """返回 active 信号 (可按 regime 过滤: 'bull'/'bear/range'/'all')。"""
+        out = []
+        for sid, s in self.data["signals"].items():
+            if s.get("status") != "active":
+                continue
+            if regime and s.get("regime", "all") not in ("all", regime):
+                continue
+            out.append(s)
+        return out
 
     def all_ids(self):
         return list(self.data["signals"].keys())
