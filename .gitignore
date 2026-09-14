@@ -110,5 +110,10 @@ strategy.py.bak*
 verified_strategies/
 islands/meta_state.json
 islands/*/strategies/*.json
-"X%*"
-*因为*
+
+# ===== 旧系统归档 (legacy/) 中的运行时状态 =====
+legacy/islands/*/state.json
+legacy/islands/meta_state.json
+legacy/islands/*/strategies/archive/
+legacy/islands/*/strategies/*.json
+legacy/islands/*/LESSONS.md
