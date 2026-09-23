@@ -168,7 +168,10 @@ class Lifecycle:
             s = self.reg.get(sid)
         ic = pd.Series([v for _, v in s["ic_history"]])
         t = recent_t_stat(ic)
-        if np.isnan(t) or abs(t) < DECAY_T_THRESH:
+        if np.isnan(t):
+            # 数据不足, 不判衰减 (关键修复: NaN 不等于衰减)
+            return False, f"数据不足({len(ic)}条), 暂不判定"
+        if abs(t) < DECAY_T_THRESH:
             s["decay_strikes"] = s.get("decay_strikes", 0) + 1
             detail = f"近期|t|={abs(t):.1f} < {DECAY_T_THRESH} (第{s['decay_strikes']}次)"
             if s["decay_strikes"] >= DECAY_N_PERIODS:
